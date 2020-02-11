@@ -125,13 +125,10 @@ protected:
     const LowerCaseString* key_;
   };
 
+  // fixfix comment
   using EntryCb = StaticLookupResponse (*)(HeaderMapImpl&);
-
-  /**
-   * This is the static lookup table that is used to determine whether a header is one of the O(1)
-   * headers. This uses a trie for lookup time at most equal to the size of the incoming string.
-   */
-  struct StaticLookupTable; // Defined in header_map_impl.cc.
+  struct StaticLookupTable;
+  virtual const StaticLookupTable& staticLookupTable() const;
 
   struct AllInlineHeaders {
     void clear() { memset(this, 0, sizeof(*this)); }
@@ -236,6 +233,8 @@ protected:
   virtual void verifyByteSize() {}
 
   ALL_INLINE_HEADERS(DEFINE_INLINE_HEADER_FUNCS)
+
+  friend class RequestHeaderMapImpl;
 };
 
 using HeaderMapImplPtr = std::unique_ptr<HeaderMapImpl>;
@@ -245,7 +244,11 @@ using HeaderMapImplPtr = std::unique_ptr<HeaderMapImpl>;
  * TODO(mattklein123): In future changes we will be differentiating the implementation between
  * these classes to both fix bugs and improve performance.
  */
-class RequestHeaderMapImpl : public HeaderMapImpl, public RequestHeaderMap {};
+class RequestHeaderMapImpl : public HeaderMapImpl, public RequestHeaderMap {
+protected:
+  struct RequestHeaderStaticLookupTable;
+  const StaticLookupTable& staticLookupTable() const override;
+};
 using RequestHeaderMapImplPtr = std::unique_ptr<RequestHeaderMapImpl>;
 class RequestTrailerMapImpl : public HeaderMapImpl, public RequestTrailerMap {};
 using RequestTrailerMapImplPtr = std::unique_ptr<RequestTrailerMapImpl>;

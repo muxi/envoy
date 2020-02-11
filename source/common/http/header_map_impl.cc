@@ -281,13 +281,28 @@ void HeaderMapImpl::HeaderEntryImpl::value(const HeaderEntry& header) {
 struct HeaderMapImpl::StaticLookupTable : public TrieLookupTable<EntryCb> {
   StaticLookupTable() {
     ALL_INLINE_HEADERS(INLINE_HEADER_STATIC_MAP_ENTRY)
+  }
+};
 
+const HeaderMapImpl::StaticLookupTable& HeaderMapImpl::staticLookupTable() const {
+  return ConstSingleton<StaticLookupTable>::get();
+}
+
+/**
+ * fixfix
+ */
+struct RequestHeaderMapImpl::RequestHeaderStaticLookupTable : public HeaderMapImpl::StaticLookupTable {
+  RequestHeaderStaticLookupTable() : StaticLookupTable() {
     // Special case where we map a legacy host header to :authority.
     add(Headers::get().HostLegacy.get().c_str(), [](HeaderMapImpl& h) -> StaticLookupResponse {
       return {&h.inline_headers_.Host_, &Headers::get().Host};
     });
   }
 };
+
+const HeaderMapImpl::StaticLookupTable& RequestHeaderMapImpl::staticLookupTable() const {
+  return ConstSingleton<RequestHeaderStaticLookupTable>::get();
+}
 
 uint64_t HeaderMapImpl::appendToHeader(HeaderString& header, absl::string_view data,
                                        absl::string_view delimiter) {
@@ -365,7 +380,7 @@ bool HeaderMapImpl::operator==(const HeaderMapImpl& rhs) const {
 bool HeaderMapImpl::operator!=(const HeaderMapImpl& rhs) const { return !operator==(rhs); }
 
 void HeaderMapImpl::insertByKey(HeaderString&& key, HeaderString&& value) {
-  EntryCb cb = ConstSingleton<StaticLookupTable>::get().find(key.getStringView());
+  EntryCb cb = staticLookupTable().find(key.getStringView());
   if (cb) {
     key.clear();
     StaticLookupResponse ref_lookup_response = cb(*this);
@@ -554,7 +569,7 @@ void HeaderMapImpl::iterateReverse(ConstIterateCb cb, void* context) const {
 
 HeaderMap::Lookup HeaderMapImpl::lookup(const LowerCaseString& key,
                                         const HeaderEntry** entry) const {
-  EntryCb cb = ConstSingleton<StaticLookupTable>::get().find(key.get());
+  EntryCb cb = staticLookupTable().find(key.get());
   if (cb) {
     // The accessor callbacks for predefined inline headers take a HeaderMapImpl& as an argument;
     // even though we don't make any modifications, we need to cast_cast in order to use the
@@ -582,7 +597,7 @@ void HeaderMapImpl::clear() {
 }
 
 void HeaderMapImpl::remove(const LowerCaseString& key) {
-  EntryCb cb = ConstSingleton<StaticLookupTable>::get().find(key.get());
+  EntryCb cb = staticLookupTable().find(key.get());
   if (cb) {
     StaticLookupResponse ref_lookup_response = cb(*this);
     removeInline(ref_lookup_response.entry_);
@@ -605,7 +620,7 @@ void HeaderMapImpl::removePrefix(const LowerCaseString& prefix) {
     if (to_remove) {
       // If this header should be removed, make sure any references in the
       // static lookup table are cleared as well.
-      EntryCb cb = ConstSingleton<StaticLookupTable>::get().find(entry.key().getStringView());
+      EntryCb cb = staticLookupTable().find(entry.key().getStringView());
       if (cb) {
         StaticLookupResponse ref_lookup_response = cb(*this);
         if (ref_lookup_response.entry_) {
@@ -666,7 +681,7 @@ HeaderMapImpl::HeaderEntryImpl& HeaderMapImpl::maybeCreateInline(HeaderEntryImpl
 }
 
 HeaderMapImpl::HeaderEntryImpl* HeaderMapImpl::getExistingInline(absl::string_view key) {
-  EntryCb cb = ConstSingleton<StaticLookupTable>::get().find(key);
+  EntryCb cb = staticLookupTable().find(key);
   if (cb) {
     StaticLookupResponse ref_lookup_response = cb(*this);
     return *ref_lookup_response.entry_;
